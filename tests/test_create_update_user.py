@@ -11,10 +11,10 @@ class TestUserEndpoint:
     """Тесты для пользователя"""
 
     @allure.story("Получение данных пользователя")
-    @allure.title("Проверка существования созданного пользователя")
+    @allure.title("Получение профиля авторизованного пользователя")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_create_unique_user(self, test_user):
-        """Проверяет, что созданный пользователь существует"""
+    def test_get_user_profile_with_auth(self, test_user):
+        """Проверяет получение профиля авторизованного пользователя"""
         with allure.step("Отправка запроса на получение данных пользователя"):
             response = APIClient.get(APIEndpoints.USER, headers={"Authorization": test_user["token"]})
 
@@ -24,7 +24,19 @@ class TestUserEndpoint:
         with allure.step("Проверка, что email пользователя соответствует ожидаемому"):
             assert response.json()["user"]["email"] == test_user["email"], "Email пользователя не совпадает"
 
+    @allure.story("Получение данных пользователя")
+    @allure.title("Получение профиля без авторизации")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_user_profile_without_auth(self):
+        """Проверяет, что нельзя получить профиль без авторизации"""
+        with allure.step("Отправка запроса на получение профиля без токена"):
+            response = APIClient.get(APIEndpoints.USER, headers={})
+
+        with allure.step("Проверка кода ответа"):
+            assert response.status_code == 401, f"Ожидался статус 401, но получен {response.status_code}"
+
     @allure.story("Обновление email с авторизацией")
+    @allure.title("Обновление email авторизованным пользователем")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_update_email_with_auth(self, test_user):
         """Тест: Обновление email пользователя с авторизацией"""
@@ -39,6 +51,7 @@ class TestUserEndpoint:
             assert response.json()["user"]["email"] == TestUserDataUpdate.VALID_EMAIL, "Email не обновился"
 
     @allure.story("Обновление имени с авторизацией")
+    @allure.title("Обновление имени авторизованным пользователем")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_update_name_with_auth(self, test_user):
         """Тест: Обновление имени пользователя с авторизацией"""
@@ -52,6 +65,7 @@ class TestUserEndpoint:
             assert response.json()["user"]["name"] == TestUserDataUpdate.VALID_NAME, "Имя не обновилось"
 
     @allure.story("Обновление пароля с авторизацией")
+    @allure.title("Обновление пароля авторизованным пользователем")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_update_password_with_auth(self, test_user):
         """Тест: Обновление пароля пользователя с авторизацией"""
@@ -64,43 +78,20 @@ class TestUserEndpoint:
         with allure.step("Проверяем, что статус ответа 200"):
             assert response.status_code == 200, f"Ошибка при обновлении пароля, статус {response.status_code}"
 
-    @allure.story("Обновление email без авторизации")
+    @pytest.mark.parametrize("field,value", [
+        ("email", TestUserDataUpdate.UNAUTHORIZED_EMAIL),
+        ("name", TestUserDataUpdate.UNAUTHORIZED_NAME),
+        ("password", TestUserDataUpdate.UNAUTHORIZED_PASSWORD),
+    ])
+    @allure.story("Обновление профиля без авторизации")
+    @allure.title("Попытка обновления {field} без авторизации")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_email_without_auth(self):
-        """Тест: Попытка обновления email без авторизации"""
-        headers = {}  
-
-        with allure.step("Отправляем запрос на обновление email без авторизации"):
-            response = APIClient.patch(APIEndpoints.USER, data={"email": TestUserDataUpdate.UNAUTHORIZED_EMAIL},
-                                       headers=headers)
-
-        with allure.step("Проверяем, что возвращается ошибка 401"):
-            assert response.status_code == 401, f"Ожидался статус 401, но получен {response.status_code}"
-            assert response.json() == TestUserDataUpdate.UNAUTHORIZED_ERROR, "Сообщение об ошибке не совпадает"
-
-    @allure.story("Обновление имени без авторизации")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_name_without_auth(self):
-        """Тест: Попытка обновления имени без авторизации"""
+    def test_update_without_auth(self, field, value):
+        """Тест: Попытка обновления без авторизации"""
         headers = {}
 
-        with allure.step("Отправляем запрос на обновление имени без авторизации"):
-            response = APIClient.patch(APIEndpoints.USER, data={"name": TestUserDataUpdate.UNAUTHORIZED_NAME},
-                                       headers=headers)
-
-        with allure.step("Проверяем, что возвращается ошибка 401"):
-            assert response.status_code == 401, f"Ожидался статус 401, но получен {response.status_code}"
-            assert response.json() == TestUserDataUpdate.UNAUTHORIZED_ERROR, "Сообщение об ошибке не совпадает"
-
-    @allure.story("Обновление пароля без авторизации")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_password_without_auth(self):
-        """Тест: Попытка обновления пароля без авторизации"""
-        headers = {}
-
-        with allure.step("Отправляем запрос на обновление пароля без авторизации"):
-            response = APIClient.patch(APIEndpoints.USER, data={"password": TestUserDataUpdate.UNAUTHORIZED_PASSWORD},
-                                       headers=headers)
+        with allure.step(f"Отправляем запрос на обновление {field} без авторизации"):
+            response = APIClient.patch(APIEndpoints.USER, data={field: value}, headers=headers)
 
         with allure.step("Проверяем, что возвращается ошибка 401"):
             assert response.status_code == 401, f"Ожидался статус 401, но получен {response.status_code}"
@@ -112,13 +103,40 @@ class TestUserEndpoint:
 class TestUserRegisterEndpoint:
     """Тесты регистрации пользователя"""
 
+    @allure.story("Успешная регистрация")
+    @allure.title("Регистрация нового пользователя")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_register_new_user(self):
+        """Проверяет успешную регистрацию нового пользователя"""
+        user_data = generate_user()
+
+        with allure.step("Отправка запроса на регистрацию"):
+            response = APIClient.post(APIEndpoints.REGISTER, user_data)
+
+        with allure.step("Проверка кода ответа"):
+            assert response.status_code == 200, f"Ожидался статус 200, но получен {response.status_code}"
+
+        with allure.step("Проверка, что возвращены токены"):
+            assert "accessToken" in response.json(), "Токен не возвращен"
+            assert "refreshToken" in response.json(), "Refresh токен не возвращен"
+
+        with allure.step("Проверка данных пользователя"):
+            assert response.json()["user"]["email"] == user_data["email"], "Email не совпадает"
+
     @allure.story("Регистрация существующего пользователя")
     @allure.title("Попытка зарегистрировать уже существующего пользователя")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_create_existing_user(self, test_user):
+    def test_register_existing_user(self, test_user):
         """Проверяет, что нельзя зарегистрировать уже существующего пользователя"""
+        # Используем данные test_user для повторной регистрации
+        existing_user = {
+            "email": test_user["email"],
+            "password": test_user["password"],
+            "name": test_user["name"]
+        }
+
         with allure.step("Отправка запроса на регистрацию уже существующего пользователя"):
-            response = APIClient.post(APIEndpoints.REGISTER, test_user)
+            response = APIClient.post(APIEndpoints.REGISTER, existing_user)
 
         with allure.step("Проверка кода ответа"):
             assert response.status_code == 403, f"Ожидался статус 403, но получен {response.status_code}"
@@ -130,7 +148,7 @@ class TestUserRegisterEndpoint:
     @allure.story("Регистрация пользователя без обязательного поля")
     @allure.title("Регистрация без поля {field}")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_create_user_missing_field(self, field):
+    def test_register_missing_field(self, field):
         """Проверяет, что регистрация невозможна без одного из обязательных полей"""
         user = generate_user()
         del user[field]
