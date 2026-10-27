@@ -106,7 +106,7 @@ class TestUserRegisterEndpoint:
     @allure.story("Успешная регистрация")
     @allure.title("Регистрация нового пользователя")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_register_new_user(self):
+    def test_register_new_user(self, cleanup_user):
         """Проверяет успешную регистрацию нового пользователя"""
         user_data = generate_user()
 
@@ -122,6 +122,26 @@ class TestUserRegisterEndpoint:
 
         with allure.step("Проверка данных пользователя"):
             assert response.json()["user"]["email"] == user_data["email"], "Email не совпадает"
+
+        # Регистрируем пользователя для очистки после теста
+        cleanup_user(user_data["email"], response.json()["accessToken"])
+
+    @allure.story("Успешная регистрация")
+    @allure.title("Простая регистрация нового пользователя")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_register_new_user_simple(self, cleanup_user):
+        """Проверяет успешную регистрацию нового пользователя"""
+        with allure.step("Генерирование данных нового пользователя"):
+            user_data = generate_user()
+
+        with allure.step("Отправка запроса на регистрацию"):
+            response = APIClient.post(APIEndpoints.REGISTER, user_data)
+
+        with allure.step("Проверка кода ответа - ожидается 200"):
+            assert response.status_code == 200
+
+        with allure.step("Регистрация пользователя для последующей очистки"):
+            cleanup_user(user_data["email"], response.json()["accessToken"])
 
     @allure.story("Регистрация существующего пользователя")
     @allure.title("Попытка зарегистрировать уже существующего пользователя")
@@ -148,7 +168,7 @@ class TestUserRegisterEndpoint:
     @allure.story("Регистрация пользователя без обязательного поля")
     @allure.title("Регистрация без поля {field}")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_register_missing_field(self, field):
+    def test_register_missing_field(self, field, cleanup_user):
         """Проверяет, что регистрация невозможна без одного из обязательных полей"""
         user = generate_user()
         del user[field]
@@ -161,3 +181,7 @@ class TestUserRegisterEndpoint:
 
         with allure.step("Проверка сообщения об ошибке"):
             assert response.json()["message"] == ErrorMessages.REQUIRED_FIELDS, "Сообщение об ошибке не совпадает"
+
+        # На случай, если тест упадёт но пользователь создастся
+        if response.status_code == 200:
+            cleanup_user(user.get("email"), response.json().get("accessToken"))
